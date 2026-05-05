@@ -15,54 +15,35 @@ st.set_page_config(
 # -----------------------------
 # Load Data
 # -----------------------------
-movies = pd.read_csv('data/movies.csv')
-ratings = pd.read_csv('data/ratings.csv')
+@st.cache_data
+def load_data():
+    movies = pd.read_csv('data/movies.csv')
+    ratings = pd.read_csv('data/ratings.csv')
+    return movies, ratings
 
-# -----------------------------
-# Preprocessing
-# -----------------------------
-movies['genres'] = movies['genres'].str.replace('|', ' ')
-movies['tags'] = movies['genres']
+movies, ratings = load_data()
 
-# -----------------------------
-# Content-Based Filtering
-# -----------------------------
-cv = CountVectorizer(max_features=5000, stop_words='english')
-vectors = cv.fit_transform(movies['tags']).toarray()
+@st.cache_resource
+def build_models(movies, ratings):
+    movies['genres'] = movies['genres'].str.replace('|', ' ')
+    movies['tags'] = movies['genres']
 
-similarity = cosine_similarity(vectors)
+    from sklearn.feature_extraction.text import CountVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
 
-def content_recommend(movie):
-    if movie not in movies['title'].values:
-        return []
+    cv = CountVectorizer(max_features=5000, stop_words='english')
+    vectors = cv.fit_transform(movies['tags']).toarray()
+    similarity = cosine_similarity(vectors)
 
-    movie_index = movies[movies['title'] == movie].index[0]
-    distances = similarity[movie_index]
+    movie_ratings = ratings.merge(movies, on='movieId')
+    pt = movie_ratings.pivot_table(index='title', columns='userId', values='rating')
+    pt.fillna(0, inplace=True)
 
-    movies_list = sorted(
-        list(enumerate(distances)),
-        reverse=True,
-        key=lambda x: x[1]
-    )[1:10]
+    similarity_scores = cosine_similarity(pt)
 
-    result = []
-    for i in movies_list:
-        title = movies.iloc[i[0]].title
-        if title != movie:
-            result.append(title)
+    return similarity, pt, similarity_scores
 
-    return result
-
-
-# -----------------------------
-# Collaborative Filtering
-# -----------------------------
-movie_ratings = ratings.merge(movies, on='movieId')
-
-pt = movie_ratings.pivot_table(index='title', columns='userId', values='rating')
-pt.fillna(0, inplace=True)
-
-similarity_scores = cosine_similarity(pt)
+similarity, pt, similarity_scores = build_models(movies, ratings)
 
 def collaborative_recommend(movie):
     if movie not in pt.index:
@@ -84,13 +65,22 @@ def collaborative_recommend(movie):
 # Hybrid Model
 # -----------------------------
 def hybrid_recommend(movie):
-    content_movies = content_recommend(movie)
+    content_movies = collaborative_recommend(movie)
     collab_movies = collaborative_recommend(movie)
 
-    final = content_movies[:5] + collab_movies[:5]
-
-    return list(dict.fromkeys(final))[:10]
-
+    final = []
+    
+    # pehle content-based add karo
+    for m in content_movies:
+        if m not in final:
+            final.append(m)
+    
+    # phir collaborative add karo
+    for m in collab_movies:
+        if m not in final:
+            final.append(m)
+    
+    return final[:10]   # always 10
 
 def fetch_poster(movie_title):
     api_key = "e6946520"
@@ -114,9 +104,6 @@ def fetch_poster(movie_title):
         return None
 
 
-# -----------------------------
-# UI
-# -----------------------------
 # -----------------------------
 # UI
 # -----------------------------
