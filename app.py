@@ -117,6 +117,9 @@ def fetch_poster(movie_title):
 # -----------------------------
 # UI
 # -----------------------------
+# -----------------------------
+# UI
+# -----------------------------
 st.markdown(
     "<h1 style='text-align: center;'>🎬 Movie Recommendation System</h1>",
     unsafe_allow_html=True
@@ -126,24 +129,27 @@ movie_list = movies['title'].values
 selected_movie = st.selectbox("Select a movie", movie_list, key="movie_select")
 
 if st.button("🎯 Get Recommendations"):
-    with st.spinner("Finding best movies for you... 🎬"):
-        recommendations = hybrid_recommend(selected_movie)
+    try:
+        with st.spinner("Finding best movies for you... 🎬"):
+            recommendations = hybrid_recommend(selected_movie)
 
-    st.markdown("## 🍿 Top Picks For You")
-    st.success("Top Recommendations:")
+        st.markdown("## 🍿 Top Picks For You")
 
-    if not recommendations:
-        st.write("No recommendations found. Try another movie.")
-    else:
-        cols = st.columns(5)
+        if not recommendations:
+            st.warning("No recommendations found.")
+        else:
+            cols = st.columns(5)
 
-        for i, movie in enumerate(recommendations):
-            poster = fetch_poster(movie)
+            for i, movie in enumerate(recommendations):
+                poster = fetch_poster(movie)
 
-            with cols[i % 5]:
-                if poster:
-                    st.image(poster, use_container_width=True)
-                else:
-                    st.image("https://via.placeholder.com/200x300?text=No+Image", use_container_width=True)
+                with cols[i % 5]:
+                    if poster:
+                        st.image(poster, use_container_width=True)
+                    else:
+                        st.image("https://via.placeholder.com/200x300?text=No+Image", use_container_width=True)
 
-                st.caption(f"🎬 {movie}")
+                    st.caption(movie)
+
+    except Exception as e:
+        st.error(f"Error: {e}")
