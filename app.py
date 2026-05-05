@@ -1,0 +1,151 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import requests
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+st.set_page_config(
+    page_title="Movie Recommender",
+    page_icon="🎬",
+    layout="wide"
+)
+
+# -----------------------------
+# Load Data
+# -----------------------------
+movies = pd.read_csv('data/movies.csv')
+ratings = pd.read_csv('data/ratings.csv')
+
+# -----------------------------
+# Preprocessing
+# -----------------------------
+movies['genres'] = movies['genres'].str.replace('|', ' ')
+movies['tags'] = movies['genres']
+
+# -----------------------------
+# Content-Based Filtering
+# -----------------------------
+cv = CountVectorizer(max_features=5000, stop_words='english')
+vectors = cv.fit_transform(movies['tags']).toarray()
+
+similarity = cosine_similarity(vectors)
+
+def content_recommend(movie):
+    if movie not in movies['title'].values:
+        return []
+
+    movie_index = movies[movies['title'] == movie].index[0]
+    distances = similarity[movie_index]
+
+    movies_list = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:10]
+
+    result = []
+    for i in movies_list:
+        title = movies.iloc[i[0]].title
+        if title != movie:
+            result.append(title)
+
+    return result
+
+
+# -----------------------------
+# Collaborative Filtering
+# -----------------------------
+movie_ratings = ratings.merge(movies, on='movieId')
+
+pt = movie_ratings.pivot_table(index='title', columns='userId', values='rating')
+pt.fillna(0, inplace=True)
+
+similarity_scores = cosine_similarity(pt)
+
+def collaborative_recommend(movie):
+    if movie not in pt.index:
+        return []
+
+    index = pt.index.get_loc(movie)
+    distances = similarity_scores[index]
+
+    movies_list = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:10]
+
+    return [pt.index[i[0]] for i in movies_list if pt.index[i[0]] != movie]
+
+
+# -----------------------------
+# Hybrid Model
+# -----------------------------
+def hybrid_recommend(movie):
+    content_movies = content_recommend(movie)
+    collab_movies = collaborative_recommend(movie)
+
+    final = content_movies[:5] + collab_movies[:5]
+
+    return list(dict.fromkeys(final))[:10]
+
+import urllib.parse
+
+def fetch_poster(movie_title):
+    api_key = "e6946520"
+    
+    # Step 1: Clean title (remove year)
+    clean_title = movie_title.split('(')[0].strip()
+    
+    # Step 2: URL encode 
+    clean_title = urllib.parse.quote(clean_title)
+    
+    url = f"http://www.omdbapi.com/?t={clean_title}&apikey={api_key}"
+    
+    data = requests.get(url).json()
+    
+    # Debug print (optional)
+    # print(data)
+
+    if data.get('Response') == "True" and data.get('Poster') != "N/A":
+        return data.get('Poster')
+    else:
+        return None
+
+
+# -----------------------------
+# UI
+# -----------------------------
+st.set_page_config(page_title="Movie Recommender", layout="centered")
+
+st.markdown(
+    "<h1 style='text-align: center;'>🎬 Movie Recommendation System</h1>",
+    unsafe_allow_html=True
+)
+
+movie_list = movies['title'].values
+selected_movie = st.selectbox("Select a movie", movie_list, key="movie_select")
+
+if st.button("🎯 Get Recommendations"):
+    with st.spinner("Finding best movies for you... 🎬"):
+        recommendations = hybrid_recommend(selected_movie)
+
+    st.markdown("## 🍿 Top Picks For You")
+    st.success("Top Recommendations:")
+
+    if not recommendations:
+        st.write("No recommendations found. Try another movie.")
+    else:
+        cols = st.columns(5)
+
+    for i, movie in enumerate(recommendations):
+        poster = fetch_poster(movie)
+
+        with cols[i % 5]:
+            if poster:
+                st.image(poster, use_container_width=True)
+            else:
+                st.image("https://via.placeholder.com/200x300?text=No+Image", use_container_width=True)
+
+            st.caption(f"🎬 {movie}")
