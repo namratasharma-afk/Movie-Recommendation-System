@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+import urllib.parse
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -90,7 +91,6 @@ def hybrid_recommend(movie):
 
     return list(dict.fromkeys(final))[:10]
 
-import urllib.parse
 
 def fetch_poster(movie_title):
     api_key = "e6946520"
@@ -117,8 +117,6 @@ def fetch_poster(movie_title):
 # -----------------------------
 # UI
 # -----------------------------
-st.set_page_config(page_title="Movie Recommender", layout="centered")
-
 st.markdown(
     "<h1 style='text-align: center;'>🎬 Movie Recommendation System</h1>",
     unsafe_allow_html=True
@@ -139,13 +137,13 @@ if st.button("🎯 Get Recommendations"):
     else:
         cols = st.columns(5)
 
-    for i, movie in enumerate(recommendations):
-        poster = fetch_poster(movie)
+        for i, movie in enumerate(recommendations):
+            poster = fetch_poster(movie)
 
-        with cols[i % 5]:
-            if poster:
-                st.image(poster, use_container_width=True)
-            else:
-                st.image("https://via.placeholder.com/200x300?text=No+Image", use_container_width=True)
+            with cols[i % 5]:
+                if poster:
+                    st.image(poster, use_container_width=True)
+                else:
+                    st.image("https://via.placeholder.com/200x300?text=No+Image", use_container_width=True)
 
-            st.caption(f"🎬 {movie}")
+                st.caption(f"🎬 {movie}")
